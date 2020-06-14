@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Hello world</title>
+    <script type="text/javascript">
+window.onload = function() {
+    var conn;
+    var msg = document.getElementById("msg");
+
+    document.getElementById("form").onsubmit = function() {
+        if (!conn || !msg.value) {
+            return false;
+        }
+
+        conn.send(msg.value);
+        msg.value = "";
+
+        return false;
+    }
+
+    conn = new WebSocket("ws://" + document.location.host + "/ws");
+    conn.onclose = function(evt) {
+        console.log("connection closed");
+    }
+
+    conn.onmessage = function(evt) {
+        console.log(evt);
+    }
+
+};
+    </script>
+</head>
+<body>
+    <div>Hello world</div>
+    <form id="form">
+        <input type="submit" value="Send" />
+        <input type="text" id="msg" size="64" autofocus />
+    </form>
+    <div id="log"></div>
+</body>
+</html>
