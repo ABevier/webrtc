@@ -8,6 +8,33 @@ window.onload = function() {
     var conn;
     var msg = document.getElementById("msg");
 
+    let startPeerConnection = function() {
+        console.log("starting RTCPeerConnection");
+        let pc = new RTCPeerConnection({
+            iceServers: [
+                {
+                    urls: 'stun:stun.l.google.com:19302'
+                }
+            ]
+        });
+
+        pc.onicecandidate = event => {
+            if (event.candidate == null) {
+                console.log("Local session description")
+                console.log(pc.localDescription);
+            }
+        }
+
+        navigator.mediaDevices.getUserMedia({video: true, audio: true})
+            .then(stream => {
+                stream.getTracks().forEach(track => pc.addTrack(track));
+                pc.createOffer().then(d => {
+                    pc.setLocalDescription(d);
+                    conn.send("offer:" + JSON.stringify(d));
+                });
+            });
+    };
+
     document.getElementById("form").onsubmit = function() {
         if (!conn || !msg.value) {
             return false;
@@ -26,29 +53,14 @@ window.onload = function() {
 
     conn.onmessage = function(evt) {
         console.log(evt);
-    }
+        if(evt.data === "ready") {
+            startPeerConnection();
+        }
 
-    let pc = new RTCPeerConnection({
-        iceServers: [
-            {
-                urls: 'stun:stun.l.google.com:19302'
-            }
-        ]
-    });
-
-    pc.onicecandidate = event => {
-        if (event.candidate == null) {
-            console.log("Local session description")
-            console.log(pc.localDescription);
+        if(evt.data.startsWith("offer:")) {
+            console.log("got an offer");
         }
     }
-
-    navigator.mediaDevices.getUserMedia({video: true, audio: true})
-        .then(stream => {
-            stream.getTracks().forEach(track => pc.addTrack(track));
-            pc.createOffer().then(d => pc.setLocalDescription(d));
-        });
-
 };
     </script>
 </head>
