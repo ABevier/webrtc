@@ -51,13 +51,12 @@ func NewHub() *Hub {
 				clients[client.namespace] = nsList
 
 				if len(nsList) == 2 {
-					for _, destClient := range nsList {
-						destClient.write([]byte("ready"))
-					}
+					// we have pair, tell the first one to iniate the call
+					nsList[0].write([]byte("initiateCall"))
 				}
 
 			case message := <-hub.messageChan:
-				log.Printf("send message %v to %v", message.content, message.sourceClient.namespace)
+				log.Printf("send message %v to %v", string(message.content), message.sourceClient.namespace)
 				nsList, ok := clients[message.sourceClient.namespace]
 				if ok {
 					for _, destClient := range nsList {
@@ -88,6 +87,8 @@ func (h *Hub) addClient(namespace string, conn *websocket.Conn) {
 func ServeWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
 
+	//TODO: use URL to create namespace / room
+
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -104,6 +105,7 @@ func ServeWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 func read(hub *Hub, client *WsClient) {
 	for {
+		//TODO: close on error
 		_, message, err := client.conn.ReadMessage()
 		if err != nil {
 			log.Println("error on read:", err)
