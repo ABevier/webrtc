@@ -15,7 +15,70 @@ var space = []byte{' '}
 var m = &sync.Mutex{}
 var conns = []*websocket.Conn{}
 
-func ServeWebSocket(w http.ResponseWriter, r *http.Request) {
+type Hub struct {
+	registerChan chan *WsClient
+	messageChan  chan *Message
+}
+
+type Message struct {
+	namespace string
+	content   []byte
+}
+
+type WsClient struct {
+	namespace string
+	conn      *websocket.Conn
+}
+
+func NewHub() *Hub {
+	hub := &Hub{
+		registerChan: make(chan *WsClient),
+		messageChan:  make(chan *Message),
+	}
+
+	go func() {
+		clients := make(map[string][]*WsClient)
+
+		for {
+			select {
+			case client := <-hub.registerChan:
+				log.Printf("add client to %v", client.namespace)
+				nsList, ok := clients[client.namespace]
+				if !ok {
+					log.Printf("new list")
+					nsList = []*WsClient{}
+				}
+				clients[client.namespace] = append(nsList, client)
+				log.Println("nslist size:", len(clients[client.namespace]))
+
+			case message := <-hub.messageChan:
+				log.Printf("send message %v to %v", message.content, message.namespace)
+				nsList, ok := clients[message.namespace]
+				if ok {
+					for _, destClient := range nsList {
+						destClient.write(message.content)
+					}
+				}
+			}
+		}
+	}()
+
+	return hub
+}
+
+func (h *Hub) addClient(namespace string, conn *websocket.Conn) {
+	client := &WsClient{
+		namespace: namespace,
+		conn:      conn,
+	}
+
+	go read(h, client)
+
+	h.registerChan <- client
+}
+
+// ServeWebSocket needs documentation <- TODO
+func ServeWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
 
 	upgrader := websocket.Upgrader{
@@ -29,17 +92,12 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.Lock()
-	defer m.Unlock()
-	conns = append(conns, conn)
-
-	log.Println("connected")
-	go read(conn)
+	hub.addClient(r.URL.String(), conn)
 }
 
-func read(conn *websocket.Conn) {
+func read(hub *Hub, client *WsClient) {
 	for {
-		_, message, err := conn.ReadMessage()
+		_, message, err := client.conn.ReadMessage()
 		if err != nil {
 			log.Println("error on read:", err)
 			return
@@ -49,18 +107,16 @@ func read(conn *websocket.Conn) {
 		message = bytes.Replace(message, newline, space, -1)
 		message = bytes.TrimSpace(message)
 
-		log.Printf("Sending: %v", message)
-
-		m.Lock()
-		for _, destConn := range conns {
-			write(destConn, message)
+		m := &Message{
+			namespace: client.namespace,
+			content:   message,
 		}
-		m.Unlock()
+		hub.messageChan <- m
 	}
 }
 
-func write(conn *websocket.Conn, message []byte) {
-	w, err := conn.NextWriter(websocket.TextMessage)
+func (c *WsClient) write(message []byte) {
+	w, err := c.conn.NextWriter(websocket.TextMessage)
 	if err != nil {
 		log.Println("Couldn't get next writer:", err)
 		return

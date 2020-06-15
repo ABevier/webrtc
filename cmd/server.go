@@ -16,8 +16,12 @@ func serveIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	hub := signaling.NewHub()
+
 	http.HandleFunc("/", serveIndex)
-	http.HandleFunc("/ws", signaling.ServeWebSocket)
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		signaling.ServeWebSocket(hub, w, r)
+	})
 
 	err := http.ListenAndServe(":8080", nil)
 
