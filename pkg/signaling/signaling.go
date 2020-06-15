@@ -1,7 +1,6 @@
 package signaling
 
 import (
-	"bytes"
 	"log"
 	"net/http"
 	"sync"
@@ -21,8 +20,8 @@ type Hub struct {
 }
 
 type Message struct {
-	namespace string
-	content   []byte
+	sourceClient *WsClient
+	content      []byte
 }
 
 type WsClient struct {
@@ -48,15 +47,23 @@ func NewHub() *Hub {
 					log.Printf("new list")
 					nsList = []*WsClient{}
 				}
-				clients[client.namespace] = append(nsList, client)
-				log.Println("nslist size:", len(clients[client.namespace]))
+				nsList = append(nsList, client)
+				clients[client.namespace] = nsList
+
+				if len(nsList) == 2 {
+					for _, destClient := range nsList {
+						destClient.write([]byte("ready"))
+					}
+				}
 
 			case message := <-hub.messageChan:
-				log.Printf("send message %v to %v", message.content, message.namespace)
-				nsList, ok := clients[message.namespace]
+				log.Printf("send message %v to %v", message.content, message.sourceClient.namespace)
+				nsList, ok := clients[message.sourceClient.namespace]
 				if ok {
 					for _, destClient := range nsList {
-						destClient.write(message.content)
+						if destClient != message.sourceClient {
+							destClient.write(message.content)
+						}
 					}
 				}
 			}
@@ -104,12 +111,12 @@ func read(hub *Hub, client *WsClient) {
 		}
 
 		//TODO: jank
-		message = bytes.Replace(message, newline, space, -1)
-		message = bytes.TrimSpace(message)
+		// message = bytes.Replace(message, newline, space, -1)
+		// message = bytes.TrimSpace(message)
 
 		m := &Message{
-			namespace: client.namespace,
-			content:   message,
+			sourceClient: client,
+			content:      message,
 		}
 		hub.messageChan <- m
 	}
