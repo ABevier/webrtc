@@ -116,10 +116,8 @@ func (h *Hub) addClient(namespace string, conn *websocket.Conn) {
 }
 
 // ServeWebSocket needs documentation <- TODO
-func ServeWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func ServeWebSocket(hub *Hub, room string, w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
-
-	//TODO: use URL to create namespace / room
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -132,7 +130,7 @@ func ServeWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hub.addClient(r.URL.String(), conn)
+	hub.addClient(room, conn)
 }
 
 func read(hub *Hub, client *WsClient) {

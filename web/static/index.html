@@ -116,7 +116,7 @@ window.onload = function() {
         return false;
     }
 
-    conn = new WebSocket("ws://" + document.location.host + "/ws");
+    conn = new WebSocket("ws://" + document.location.host + "/ws" + "/default");
     conn.onclose = function(evt) {
         console.log("connection closed");
     }
