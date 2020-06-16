@@ -3,7 +3,6 @@ package signaling
 import (
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -11,12 +10,10 @@ import (
 var newline = []byte{'\n'}
 var space = []byte{' '}
 
-var m = &sync.Mutex{}
-var conns = []*websocket.Conn{}
-
 type Hub struct {
-	registerChan chan *WsClient
-	messageChan  chan *Message
+	registerChan   chan *WsClient
+	deregisterChan chan *WsClient
+	messageChan    chan *Message
 }
 
 type Message struct {
@@ -31,8 +28,9 @@ type WsClient struct {
 
 func NewHub() *Hub {
 	hub := &Hub{
-		registerChan: make(chan *WsClient),
-		messageChan:  make(chan *Message),
+		registerChan:   make(chan *WsClient),
+		deregisterChan: make(chan *WsClient),
+		messageChan:    make(chan *Message),
 	}
 
 	go func() {
@@ -64,6 +62,40 @@ func NewHub() *Hub {
 							destClient.write(message.content)
 						}
 					}
+				}
+			case client := <-hub.deregisterChan:
+				log.Printf("remove client from %v", client.namespace)
+				list, ok := clients[client.namespace]
+				if !ok {
+					log.Printf("Tried to remove from room that doesn't exist!")
+					continue
+				}
+
+				//TODO: all of this needs to be a Room Struct with add / remove
+
+				//find idx of client
+				idx := -1
+				for i, listClient := range list {
+					if client == listClient {
+						idx = i
+						break
+					}
+				}
+
+				if idx == -1 {
+					log.Printf("Tried to remove client that is not in the room!")
+					continue
+				}
+
+				//overwrite client idx with last idx and shorten the slice
+				list[idx] = list[len(list)-1]
+				list = list[:len(list)-1]
+
+				if len(list) > 0 {
+					log.Printf("removed client, size is now: %v", len(list))
+					clients[client.namespace] = list
+				} else {
+					delete(clients, client.namespace)
 				}
 			}
 		}
@@ -104,17 +136,22 @@ func ServeWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
 }
 
 func read(hub *Hub, client *WsClient) {
+	defer func() {
+		hub.deregisterChan <- client
+		client.conn.Close()
+	}()
+
 	for {
 		//TODO: close on error
 		_, message, err := client.conn.ReadMessage()
 		if err != nil {
-			log.Println("error on read:", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error closing: %v", err)
+			} else {
+				log.Printf("normal close: %v", err)
+			}
 			return
 		}
-
-		//TODO: jank
-		// message = bytes.Replace(message, newline, space, -1)
-		// message = bytes.TrimSpace(message)
 
 		m := &Message{
 			sourceClient: client,
