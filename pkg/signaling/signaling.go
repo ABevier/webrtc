@@ -2,8 +2,8 @@ package signaling
 
 import (
 	"log"
-	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
@@ -116,15 +116,13 @@ func (h *Hub) addClient(namespace string, conn *websocket.Conn) {
 }
 
 // ServeWebSocket needs documentation <- TODO
-func ServeWebSocket(hub *Hub, room string, w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
-
+func ServeWebSocket(hub *Hub, room string, c *gin.Context) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Println("Failed to upgrade ws: ", err)
 		return

@@ -16,7 +16,7 @@ func main() {
 
 	router.GET("/ws/:room", func(c *gin.Context) {
 		room := c.Param("room")
-		signaling.ServeWebSocket(hub, room, c.Writer, c.Request)
+		signaling.ServeWebSocket(hub, room, c)
 	})
 
 	err := router.Run()
