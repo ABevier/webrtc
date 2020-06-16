@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <title>Hello world</title>
+    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
     <script type="text/javascript">
     //TODO: use adapter.js
 window.onload = function() {
@@ -21,10 +22,23 @@ window.onload = function() {
             ]
         });
 
+        pc.onicegatheringstatechange = event => {
+            console.log("ice gathering state change: " + pc.iceGatheringState);
+        }
+
+        pc.oniceconnectionstatechange = event => {
+            console.log("ice connection state change: " + pc.iceConnectionState);
+        }
+
         pc.onicecandidate = event => {
             if (event.candidate == null) {
-                console.log("Local session description")
+                // null signals end-of-candiates
+                console.log("onicecandidate: end-of-candidates. Local session description:")
                 console.log(pc.localDescription);
+            } else {
+                console.log("on ice candidate: ");
+                console.log(event.candidate);
+                conn.send("candidate:" + JSON.stringify(event.candidate));
             }
         };
 
@@ -32,27 +46,49 @@ window.onload = function() {
             console.log("Added a track!");
             console.log(event);
 
-            var el = document.createElement(event.track.kind)
-            el.srcObject = event.streams[0]
-            el.autoplay = true
-            el.controls = true
-            document.getElementById('remoteVideos').appendChild(el)
+            var el = document.createElement(event.track.kind);
+            el.autoplay = true;
+            el.controls = true;
+
+            //TODO: why does this work!?!!??!
+            if (event.streams && event.streams[0]) {
+                console.log("add stream");
+                el.srcObject = event.streams[0];
+            } else {
+                console.log("add track");
+                inboundStream = new MediaStream();
+                el.srcObject = inboundStream;
+                inboundStream.addTrack(event.track);
+            }
+
+            document.getElementById('remoteVideos').appendChild(el);
         };
+
+        pc.onaddstream = event => {
+            console.log("add stream!")
+            console.log(event);
+        }
 
         peerConnection = pc;
 
         navigator.mediaDevices.getUserMedia({video: true, audio: true})
             .then(stream => {
-                stream.getTracks().forEach(track => pc.addTrack(track));
+                stream.getTracks().forEach(track => {
+                    console.log("add track")
+                    pc.addTrack(track);
+                });
             })
             .then(_ => {
-                callback(pc)
+                console.log("media added")
+                callback(pc);
             });
     };
 
     let createOffer = function(pc) {
         console.log("create offer");
         pc.createOffer().then(offer => {
+            console.log("offering...")
+            console.log(offer);
             pc.setLocalDescription(offer);
             conn.send("offer:" + JSON.stringify(offer));
         });
@@ -93,14 +129,19 @@ window.onload = function() {
         console.log(evt);
         if(evt.data === "initiateCall") {
             createPeerConnection(createOffer)
-        } else if(evt.data.startsWith("offer:")) {
+        } else if (evt.data.startsWith("offer:")) {
             console.log("got an offer");
             let offer = JSON.parse(getData(evt));
             createPeerConnection((pc) => createAnswer(pc, offer));
-        } else if(evt.data.startsWith("answer:")) {
+        } else if (evt.data.startsWith("answer:")) {
             console.log("got an answer!");
             let answer = JSON.parse(getData(evt));
             peerConnection.setRemoteDescription(answer);
+        } else if (evt.data.startsWith("candidate:")) {
+            console.log("got candidate!");
+            let candidate = JSON.parse(getData(evt));
+            //todo: check the return code?? this is a promise
+            peerConnection.addIceCandidate(candidate);
         }
     }
 };
