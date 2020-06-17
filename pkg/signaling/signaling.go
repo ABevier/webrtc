@@ -138,7 +138,7 @@ func read(hub *Hub, client *WsClient) {
 	}()
 
 	for {
-		//TODO: close on error
+		//TODO: PING / PONG - look at gorilla docs
 		_, message, err := client.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {

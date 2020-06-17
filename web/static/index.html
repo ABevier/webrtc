@@ -46,28 +46,18 @@ window.onload = function() {
             console.log("Added a track!");
             console.log(event);
 
-            var el = document.createElement(event.track.kind);
-            el.autoplay = true;
-            el.controls = true;
+            var el = document.getElementById("remote-video");
 
-            //TODO: why does this work!?!!??!
             if (event.streams && event.streams[0]) {
+                // this is good
                 console.log("add stream");
                 el.srcObject = event.streams[0];
             } else {
-                console.log("add track");
-                inboundStream = new MediaStream();
-                el.srcObject = inboundStream;
-                inboundStream.addTrack(event.track);
+                console.log("no stream present!")
             }
 
             document.getElementById('remoteVideos').appendChild(el);
         };
-
-        pc.onaddstream = event => {
-            console.log("add stream!")
-            console.log(event);
-        }
 
         peerConnection = pc;
 
@@ -75,7 +65,8 @@ window.onload = function() {
             .then(stream => {
                 stream.getTracks().forEach(track => {
                     console.log("add track")
-                    pc.addTrack(track);
+                    // THAT SECOND PARAM IS VITAL
+                    pc.addTrack(track, stream);
                 });
             })
             .then(_ => {
@@ -154,10 +145,8 @@ window.onload = function() {
         <input type="text" id="msg" size="64" autofocus />
     </form>
     <div id="log"></div>
-    <div id="remoteVideos"></div>
-    <!-- TODO: what are these params???
+    <!-- TODO: what are these params??? -->
     <video id="remote-video" autoplay playsinline></video>
     <video id="local-video" autoplay muted playsinline></video>
-    -->
 </body>
 </html>
