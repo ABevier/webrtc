@@ -2,14 +2,21 @@
 <html lang="en">
 <head>
     <title>Hello world</title>
+    <link rel="stylesheet" href="web/static/css/styles.css" />
+    <!-- don't forget this guy -->
     <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
     <script type="text/javascript">
-    //TODO: use adapter.js
 window.onload = function() {
+    //TODO: ugh....
+    // video + audio stream
+    var mediaStream;
+
+    //TODO: there's some grossness with this state
+    // web socket connection
     var conn;
-    var msg = document.getElementById("msg");
 
     //TODO: oh man this state is messy....
+    // peer rtc connection
     var peerConnection;
 
     let createPeerConnection = function(callback) {
@@ -59,20 +66,14 @@ window.onload = function() {
             document.getElementById('remoteVideos').appendChild(el);
         };
 
-        peerConnection = pc;
+        mediaStream.getTracks().forEach(track => {
+            console.log("adding track to peer connection");
+            // THAT SECOND PARAM IS VITAL
+            pc.addTrack(track, mediaStream);
+        });
 
-        navigator.mediaDevices.getUserMedia({video: true, audio: true})
-            .then(stream => {
-                stream.getTracks().forEach(track => {
-                    console.log("add track")
-                    // THAT SECOND PARAM IS VITAL
-                    pc.addTrack(track, stream);
-                });
-            })
-            .then(_ => {
-                console.log("media added")
-                callback(pc);
-            });
+        peerConnection = pc;
+        callback(pc);
     };
 
     let createOffer = function(pc) {
@@ -94,59 +95,60 @@ window.onload = function() {
             pc.setLocalDescription(answer);
             conn.send("answer:" + JSON.stringify(answer));
         });
-    }
+    };
 
-    document.getElementById("form").onsubmit = function() {
-        if (!conn || !msg.value) {
-            return false;
+    let createWebSocket = function() {
+        console.log("creating websocket");
+
+        conn = new WebSocket("ws://" + document.location.host + "/ws" + "/default");
+        conn.onclose = function(evt) {
+            console.log("connection closed");
         }
 
-        conn.send(msg.value);
-        msg.value = "";
-
-        return false;
-    }
-
-    conn = new WebSocket("ws://" + document.location.host + "/ws" + "/default");
-    conn.onclose = function(evt) {
-        console.log("connection closed");
-    }
-
-    let getData = function(evt) {
-        return evt.data.slice(evt.data.indexOf(":") + 1);
-    }
-
-    conn.onmessage = function(evt) {
-        console.log(evt);
-        if(evt.data === "initiateCall") {
-            createPeerConnection(createOffer)
-        } else if (evt.data.startsWith("offer:")) {
-            console.log("got an offer");
-            let offer = JSON.parse(getData(evt));
-            createPeerConnection((pc) => createAnswer(pc, offer));
-        } else if (evt.data.startsWith("answer:")) {
-            console.log("got an answer!");
-            let answer = JSON.parse(getData(evt));
-            peerConnection.setRemoteDescription(answer);
-        } else if (evt.data.startsWith("candidate:")) {
-            console.log("got candidate!");
-            let candidate = JSON.parse(getData(evt));
-            //todo: check the return code?? this is a promise
-            peerConnection.addIceCandidate(candidate);
+        let getData = function(evt) {
+            return evt.data.slice(evt.data.indexOf(":") + 1);
         }
-    }
+
+        conn.onmessage = function(evt) {
+            console.log(evt);
+            if(evt.data === "initiateCall") {
+                createPeerConnection(createOffer)
+            } else if (evt.data.startsWith("offer:")) {
+                console.log("got an offer");
+                let offer = JSON.parse(getData(evt));
+                createPeerConnection((pc) => createAnswer(pc, offer));
+            } else if (evt.data.startsWith("answer:")) {
+                console.log("got an answer!");
+                let answer = JSON.parse(getData(evt));
+                peerConnection.setRemoteDescription(answer);
+            } else if (evt.data.startsWith("candidate:")) {
+                console.log("got candidate!");
+                let candidate = JSON.parse(getData(evt));
+                //todo: check the return code?? this is a promise
+                peerConnection.addIceCandidate(candidate);
+            }
+        }
+    };
+
+    navigator.mediaDevices.getUserMedia({video: true, audio: true})
+        .then(stream => {
+            let localVideo = document.getElementById("local-video");
+            localVideo.srcObject = stream;
+            mediaStream = stream;
+
+            console.log("media added")
+            createWebSocket();
+        });
 };
     </script>
 </head>
 <body>
     <div>Hello world</div>
-    <form id="form">
-        <input type="submit" value="Send" />
-        <input type="text" id="msg" size="64" autofocus />
-    </form>
     <div id="log"></div>
     <!-- TODO: what are these params??? -->
     <video id="remote-video" autoplay playsinline></video>
-    <video id="local-video" autoplay muted playsinline></video>
+    <div id="local-video-container">
+        <video id="local-video" autoplay muted playsinline></video>
+    </div>
 </body>
 </html>

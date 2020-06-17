@@ -13,6 +13,7 @@ func main() {
 	router := gin.Default()
 
 	router.StaticFile("/", "web/static/index.html")
+	router.Static("/web/static", "web/static/")
 
 	router.GET("/ws/:room", func(c *gin.Context) {
 		room := c.Param("room")
